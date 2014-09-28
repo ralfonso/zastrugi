@@ -1,0 +1,20 @@
+{
+  "name": "zastrugi",
+  "version": "0.0.1",
+  "authors": [
+    "Ryan Roemmich <ralfonso@gmail.com>"
+  ],
+  "description": "web interface for the zastrugi key/value token replacement engine",
+  "license": "MIT",
+  "private": true,
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "react": "~0.11.2"
+  }
+}
