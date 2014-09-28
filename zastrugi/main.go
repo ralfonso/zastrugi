@@ -18,11 +18,13 @@ const ProjectConf = ".zastrugi"
 const LDelim = "%%"
 const RDelim = "%%"
 
+// a type for our config file
 type ConfigFile struct {
     Namespace string `json:namespace`
     SearchPaths []string `json:searchPaths`
 }
 
+// a type that represents a token within a file
 type Token struct {
     startPos int
     endPos int
@@ -50,20 +52,25 @@ func main() {
     etcdClient := etcd.NewClient([]string{*dataSourcePtr})
 
     // spawn four goroutines for scanning files and replacing tokens
-    tasks := make(chan string, 64)
+    tasks := make(chan string, 4)
     var wg sync.WaitGroup
+
     for i := 0; i < 4; i++ {
         wg.Add(1)
+
+        // the goroutine takes filenames off of the tasks channel
+        // and processes them
         go func() {
             for fileName := range tasks {
                 fmt.Println("processing file:", fileName)
                 processFile(etcdClient, keyPrefix, fileName)
             }
+
             wg.Done()
         }()
     }
 
-    // walk the searchpaths to find file candidates for token replacement
+    // walk the searchPaths to find file candidates for token replacement
     for _, path := range config.SearchPaths {
         // searchpaths can be globs
         matches, e := filepath.Glob(path)
@@ -72,10 +79,12 @@ func main() {
         }
 
         for _, fileName := range matches {
+            // send each filename to the tasks channel
             tasks <- fileName
         }
     }
 
+    // close the channel and wait for the workers to finish
     close(tasks)
     wg.Wait()
 }
