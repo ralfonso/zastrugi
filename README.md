@@ -26,3 +26,14 @@ By default, `zastrugi` scans the current directory for a `.zastrugi` config file
 
 ### zastrugi-web
 `zastrugi-web` is an upcoming web-based tool for managing keys in the etcd datastore.
+
+-----------------------
+
+TODO
+-----------------------------
+
+* build instructions!
+* the completion of zastrugi-web
+* allow complete files to be stored in etcd
+* configurable delimiters
+* support multiple backends (a very long term goal)
