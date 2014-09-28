@@ -14,10 +14,10 @@ By default, `zastrugi` scans the current directory for a `.zastrugi` file that i
 ```javascript
 {
 	"namespace":  "project-name",
-	"searchPaths: ["site/config.py", "site/config/*.py"]
+	"searchPaths": ["site/config.py", "site/config/*.py"]
 }
 ```
 
-`zastrugi` is run as follows:
+`zastrugi` is run as follows, from the root of the project on which to perform replacement.
 
-`zastrugi -datasource http://etcd.url:4001`
+`zastrugi -datasource=http://etcd.url:4001`
