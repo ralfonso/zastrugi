@@ -1,15 +1,17 @@
 zastrugi - key/value based token replacement
 ============================================
 
+overview
+----------------------------------------------------
+zastrugi is a build preprocessor that scans source and configuration files for tokens to replace. It uses [etcd](https://github.com/coreos/etcd) as its key/value datastore. This enables developers to keep sensitive data such as API keys, database connection strings, usernames, passwords, and SSH keys out of their repository and instead store them in a centralized location. zastrugi supports namespacing of keys to enable its use for multiple projects.
+
 components
 -----------------------------------------------------
-`zastrugi` is the command-line tool to search a configurable list of files for tokens and replace them with values from the key/value store [etcd](https://github.com/coreos/etcd). It supports namespaces (which generally align with projects/source-sets) and in the future, will support environment/context value overrides.
 
-`zastrugi-web` is a web-based tool for managing keys
+### zastrugi
+`zastrugi` is the command-line tool to apply token substitution to the specified files.
 
-project configuration
------------------------------------------------------
-By default, `zastrugi` scans the current directory for a `.zastrugi` file that is used for configuration. This file is in JSON format as follows.
+By default, `zastrugi` scans the current directory for a `.zastrugi` config file. This file should contain configuration in the following JSON format:
 
 ```javascript
 {
@@ -21,3 +23,6 @@ By default, `zastrugi` scans the current directory for a `.zastrugi` file that i
 `zastrugi` is run as follows, from the root of the project on which to perform replacement.
 
 `zastrugi -datasource=http://etcd.url:4001`
+
+### zastrugi-web
+`zastrugi-web` is an upcoming web-based tool for managing keys in the etcd datastore.
