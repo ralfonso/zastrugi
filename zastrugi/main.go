@@ -11,6 +11,7 @@ import (
     "os"
     "regexp"
     "github.com/coreos/go-etcd/etcd"
+    "sync"
 )
 
 const ProjectConf = ".zastrugi"
@@ -45,6 +46,23 @@ func main() {
         panic(err)
     }
 
+    keyPrefix := *rootPathPtr + "/" + config.Namespace
+    etcdClient := etcd.NewClient([]string{*dataSourcePtr})
+
+    // spawn four goroutines for scanning files and replacing tokens
+    tasks := make(chan string, 64)
+    var wg sync.WaitGroup
+    for i := 0; i < 4; i++ {
+        wg.Add(1)
+        go func() {
+            for fileName := range tasks {
+                fmt.Println("processing file:", fileName)
+                processFile(etcdClient, keyPrefix, fileName)
+            }
+            wg.Done()
+        }()
+    }
+
     // walk the searchpaths to find file candidates for token replacement
     for _, path := range config.SearchPaths {
         // searchpaths can be globs
@@ -54,66 +72,40 @@ func main() {
         }
 
         for _, fileName := range matches {
-            // read the file as a UTF-8 string
-            target, e := ioutil.ReadFile(fileName)
-            if (e != nil) {
-                panic(e)
-            }
-
-            targetStr := string(target)
-
-            // scan for tokens - this is currently very naive
-            var tokens []Token
-            for rs, i := []rune(targetStr), 0; i < len(rs); {
-                if (strings.HasPrefix(targetStr[i:], LDelim)) {
-                    i, tokens = scanToken(i, targetStr, tokens)
-                } else {
-                    i += 1
-                }
-            }
-
-            // print messages to the console if any of the tokens are invalid
-            validateTokens(fileName, tokens)
-
-            // search etcd for keys that match our tokens
-            replacements := lookUpValues(*dataSourcePtr, *rootPathPtr, config.Namespace, tokens)
-
-            // build a buffer of bytes for the replacement file
-            var resultBuffer bytes.Buffer
-            for rs, i := []rune(targetStr), 0; i < len(rs); {
-                for _, token := range tokens {
-                    if i == token.startPos {
-                        replacement, present := replacements[token.key]
-
-                        // if a replacement was not in etcd, we just return the
-                        // token to the file
-                        if (present) {
-                            resultBuffer.WriteString(replacement)
-                            i += token.endPos - i
-                            continue
-                        }
-                    }
-                }
-
-                // copy the current string if there is no token
-                resultBuffer.WriteString(string(rs[i]))
-                i += 1
-            }
-
-            file, err := os.OpenFile(fileName, os.O_RDWR, 0660);
-            if (err != nil) {
-                panic(err)
-            }
-
-            _, err = file.WriteString(resultBuffer.String())
-
-            if (err != nil) {
-                panic(err)
-            }
-
-            file.Close()
+            tasks <- fileName
         }
     }
+
+    close(tasks)
+    wg.Wait()
+}
+
+func processFile(etcdClient *etcd.Client, keyPrefix string, fileName string) {
+    // read the file as a UTF-8 string
+    target, e := ioutil.ReadFile(fileName)
+    if (e != nil) {
+        panic(e)
+    }
+
+    original := string(target)
+
+    // scan for tokens - this is currently very naive
+    var tokens []Token
+    for rs, i := []rune(original), 0; i < len(rs); {
+        if (strings.HasPrefix(original[i:], LDelim)) {
+            i, tokens = scanToken(i, original, tokens)
+        } else {
+            i += 1
+        }
+    }
+
+    // print messages to the console if any of the tokens are invalid
+    validateTokens(fileName, tokens)
+
+    // search etcd for keys that match our tokens
+    replacements := lookUpValues(etcdClient, keyPrefix, fileName, tokens)
+
+    replaceFile(fileName, original, tokens, replacements)
 }
 
 func scanToken(index int, input string, result []Token) (int, []Token) {
@@ -146,22 +138,19 @@ func validateTokens(fileName string, tokens []Token) bool {
     return true
 }
 
-func lookUpValues(dataSource string, rootPath string, namespace string, tokens []Token) map[string]string {
-    fmt.Println("DataSource:", dataSource)
-    etcdClient := etcd.NewClient([]string{dataSource})
+func lookUpValues(etcdClient *etcd.Client, keyPrefix string, fileName string, tokens []Token) map[string]string {
 
     mapping := make(map[string]string)
 
     for _, token := range tokens {
-        etcdKey := keyFromComponents(rootPath, namespace, token.key)
-
-        rawResponse, err := etcdClient.RawGet(etcdKey, true, false)
+        fullKey := keyPrefix + "/" + token.key
+        rawResponse, err := etcdClient.RawGet(fullKey, true, false)
 
         if (rawResponse == nil) {
             panic(err)
         } else {
             if (rawResponse.StatusCode == 404) {
-                fmt.Println(fmt.Sprintf("Key not found: '%v/%v'", namespace, token.key))
+                fmt.Println(fmt.Sprintf("Key '%v' not found in file '%v'", token.key, fileName))
             } else {
                 item, err := rawResponse.Unmarshal()
 
@@ -177,7 +166,40 @@ func lookUpValues(dataSource string, rootPath string, namespace string, tokens [
     return mapping
 }
 
-func keyFromComponents(rootPath string, namespace string, key string) string {
-    // just mash them together with slashes
-    return strings.Join([]string{rootPath, namespace, key}, "/")
+func replaceFile(fileName string, original string, tokens []Token, replacements map[string]string) {
+    // build a buffer of bytes for the replacement file
+    var resultBuffer bytes.Buffer
+    for rs, i := []rune(original), 0; i < len(rs); {
+        for _, token := range tokens {
+            if i == token.startPos {
+                replacement, present := replacements[token.key]
+
+                // if a replacement was not in etcd, we just return the
+                // token to the file
+                if (present) {
+                    resultBuffer.WriteString(replacement)
+                    i += token.endPos - i
+                    continue
+                }
+            }
+        }
+
+        // copy the current string if there is no token
+        resultBuffer.WriteString(string(rs[i]))
+        i += 1
+    }
+
+    file, err := os.OpenFile(fileName, os.O_RDWR, 0660);
+    if (err != nil) {
+        panic(err)
+    }
+
+    _, err = file.WriteString(resultBuffer.String())
+
+    if (err != nil) {
+        panic(err)
+    }
+
+    file.Close()
+
 }
