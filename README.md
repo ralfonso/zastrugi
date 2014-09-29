@@ -32,7 +32,8 @@ By default, `zastrugi` scans the current directory for a `.zastrugi` config file
 TODO
 -----------------------------
 
-* build instructions!
+* documentation
+* build instructions
 * the completion of zastrugi-web
 * allow complete files to be stored in etcd
 * configurable delimiters
