@@ -108,13 +108,17 @@ func processFile(etcdClient *etcd.Client, keyPrefix string, fileName string) {
         }
     }
 
-    // print messages to the console if any of the tokens are invalid
-    validateTokens(fileName, tokens)
+    if (len(tokens) > 0) {
+        // print messages to the console if any of the tokens are invalid
+        validateTokens(fileName, tokens)
 
-    // search etcd for keys that match our tokens
-    replacements := lookUpValues(etcdClient, keyPrefix, fileName, tokens)
+        // search etcd for keys that match our tokens
+        replacements := lookUpValues(etcdClient, keyPrefix, fileName, tokens)
 
-    replaceFile(fileName, original, tokens, replacements)
+        if (len(replacements) > 0) {
+            replaceFile(fileName, original, tokens, replacements)
+        }
+    }
 }
 
 func scanToken(index int, input string, result []Token) (int, []Token) {
